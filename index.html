@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DomainPortal | Submission Portal & Admin Dashboard</title>
+  <meta name="description" content="Minimal domain submission portal and secure admin dashboard with mandatory sign in." />
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body data-theme="dark">
+  <!-- Minimal Toast Alerts -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- ========================================== -->
+  <!-- 1. MANDATORY MINIMAL SIGN IN SCREEN        -->
+  <!-- (Shown FIRST on app startup when not logged in) -->
+  <!-- ========================================== -->
+  <div id="mandatory-auth-screen" class="minimal-auth-screen">
+    <div class="minimal-auth-card">
+      <div class="auth-header">
+        <div class="auth-brand">
+          <span class="brand-dot"></span>
+          <span class="brand-name">Domain<span class="brand-accent">Portal</span></span>
+        </div>
+        <p class="auth-sub" id="auth-sub-text">Sign in to your account</p>
+      </div>
+
+      <!-- SIGN IN FORM (Only Sign In is public) -->
+      <form id="form-mandatory-login" class="auth-form">
+        <div class="form-field">
+          <label for="gate-login-email" class="field-label">Email</label>
+          <input 
+            type="email" 
+            id="gate-login-email" 
+            class="input-field" 
+            placeholder="name@example.com" 
+            required 
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="gate-login-password" class="field-label">Password</label>
+          <input 
+            type="password" 
+            id="gate-login-password" 
+            class="input-field" 
+            placeholder="Password" 
+            required 
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+      </form>
+
+      <div class="auth-footnote">
+        <span>🔒 Secure access. New client accounts are created by Administrator.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 2. MAIN APPLICATION (Shown ONLY when logged in) -->
+  <!-- ========================================== -->
+  <div id="main-app-wrapper" style="display: none;">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <span class="brand-name">Domain<span class="brand-accent">Portal</span></span>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs" role="tablist">
+          <button id="tab-portal" class="nav-tab active" role="tab" aria-selected="true" data-view="portal">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            <span>Submission Portal</span>
+          </button>
+
+          <button id="tab-admin" class="nav-tab" role="tab" aria-selected="false" data-view="admin">
+            <svg id="admin-lock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>Admin Dashboard</span>
+            <span id="badge-total-domains" class="badge-count">0</span>
+          </button>
+        </nav>
+
+        <!-- Active User Profile & Controls -->
+        <div class="header-actions">
+          <div class="user-badge">
+            <span class="user-avatar" id="header-user-avatar">US</span>
+            <span class="user-label" id="header-user-label">user@example.com</span>
+            <button id="btn-logout" class="btn-logout" title="Sign out and lock app">Sign Out</button>
+          </div>
+
+          <!-- Theme Toggle -->
+          <button id="theme-toggle-btn" class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+            <svg class="sun-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="moon-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Views Container -->
+    <main class="main-content">
+
+      <!-- ========================================== -->
+      <!-- VIEW 1: SUBMISSION PORTAL (CLIENT VIEW)    -->
+      <!-- ========================================== -->
+      <section id="view-portal" class="view-panel active">
+        <div class="section-intro">
+          <h1 class="view-title">Submission Portal</h1>
+          <p class="view-desc">Submit your domain name, category, price, and optional note. All data is private to you.</p>
+        </div>
+
+        <!-- Mode Switcher (Single vs Bulk Upload) -->
+        <div class="portal-mode-nav">
+          <button id="mode-single-btn" class="mode-btn active" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>Single Submission</span>
+          </button>
+          <button id="mode-bulk-btn" class="mode-btn" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span>Bulk Excel Upload</span>
+            <span class="badge-new">Excel / CSV</span>
+          </button>
+        </div>
+
+        <!-- Single Submission Card -->
+        <div id="card-single-submission" class="card form-card">
+          <form id="form-submit-domain" class="clean-form" novalidate>
+            <!-- Domain Name -->
+            <div class="form-group">
+              <label for="input-domain" class="label">Domain Name <span class="req">*</span></label>
+              <input 
+                type="text" 
+                id="input-domain" 
+                class="input mono" 
+                placeholder="e.g. hyperflow.ai, paynex.io, cloudbase.com" 
+                required 
+                autocomplete="off"
+              />
+              <span class="hint">Domain name with extension</span>
+            </div>
+
+            <!-- Custom Category Textarea -->
+            <div class="form-group">
+              <label for="input-category" class="label">Category <span class="req">*</span></label>
+              <textarea 
+                id="input-category" 
+                class="input textarea-sm" 
+                rows="2" 
+                placeholder="Type any custom category (e.g. AI SaaS, FinTech, Real Estate, Health Tech...)" 
+                required
+              ></textarea>
+              <span class="hint">Write any kind of category you want</span>
+            </div>
+
+            <!-- Price ($) -->
+            <div class="form-group">
+              <label for="input-price" class="label">Price ($ USD) <span class="req">*</span></label>
+              <div class="input-with-symbol">
+                <span class="symbol">$</span>
+                <input 
+                  type="number" 
+                  id="input-price" 
+                  class="input" 
+                  placeholder="e.g. 1500" 
+                  min="1" 
+                  step="1" 
+                  required 
+                />
+              </div>
+            </div>
+
+            <!-- Note (OPTIONAL) -->
+            <div class="form-group">
+              <div class="label-with-badge">
+                <label for="input-note" class="label">Note / Details</label>
+                <span class="opt-badge">Optional</span>
+              </div>
+              <textarea 
+                id="input-note" 
+                class="input textarea-md" 
+                rows="3" 
+                placeholder="Optional: add registrar, traffic, age, or leave blank..."
+              ></textarea>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="form-action">
+              <button type="submit" id="btn-submit" class="btn btn-primary">
+                <span>Submit Domain</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Bulk Excel Upload Card -->
+        <div id="card-bulk-submission" class="card form-card" style="display: none;">
+          <!-- Demo Sheet Instruction & Download Box -->
+          <div class="demo-sheet-box">
+            <div class="demo-sheet-info">
+              <div class="demo-sheet-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+              </div>
+              <div>
+                <h4 class="demo-sheet-title">New to Bulk Upload? Check the Demo Sheet</h4>
+                <p class="demo-sheet-desc">Download or preview our sample Excel sheet to see the exact columns needed: <strong>Domain Name, Category, Price, Note</strong>.</p>
+              </div>
+            </div>
+            <div class="demo-sheet-actions">
+              <a 
+                id="btn-download-demo-sheet" 
+                href="./demo_domains_template.xlsx" 
+                download="demo_domains_template.xlsx" 
+                role="button"
+                class="btn btn-secondary btn-sm" 
+                title="Download Excel template (.xlsx)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download Demo Sheet (.xlsx)</span>
+              </a>
+              <a 
+                id="btn-download-demo-csv" 
+                href="./demo_domains_template.csv" 
+                download="demo_domains_template.csv" 
+                role="button"
+                class="btn btn-secondary btn-sm" 
+                title="Download CSV template (.csv)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download CSV (.csv)</span>
+              </a>
+              <button id="btn-toggle-demo-preview" type="button" class="btn btn-ghost btn-sm">
+                <span>View Format Guide</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Format Guide Drawer (Collapsible) -->
+          <div id="demo-format-guide" class="demo-format-guide" style="display: none;">
+            <div class="format-guide-header">
+              <span class="guide-label">Required Excel Column Structure:</span>
+            </div>
+            <div class="table-responsive">
+              <table class="format-table">
+                <thead>
+                  <tr>
+                    <th>Domain Name <span class="req">*</span></th>
+                    <th>Category <span class="req">*</span></th>
+                    <th>Price ($) <span class="req">*</span></th>
+                    <th>Note (Optional)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>novacloud.ai</code></td>
+                    <td>Cloud & AI Infrastructure</td>
+                    <td>$2,400</td>
+                    <td>Clean history, Namecheap registrar</td>
+                  </tr>
+                  <tr>
+                    <td><code>finpay.io</code></td>
+                    <td>Fintech & Mobile Banking</td>
+                    <td>$3,800</td>
+                    <td>Short 6-letter brand, instant auth code</td>
+                  </tr>
+                  <tr>
+                    <td><code>marketspark.com</code></td>
+                    <td>E-Commerce & Digital Marketing</td>
+                    <td>$1,250</td>
+                    <td>Escrow ready, optional note example</td>
+                  </tr>
+                  <tr>
+                    <td><code>healthtrack.app</code></td>
+                    <td>Digital Health & Wellness</td>
+                    <td>$850</td>
+                    <td><em>(blank note is allowed)</em></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Drag & Drop Zone -->
+          <div id="bulk-dropzone" class="bulk-dropzone">
+            <input type="file" id="bulk-file-input" accept=".xlsx, .xls, .csv" style="display: none;" />
+            <div class="dropzone-content">
+              <div class="dropzone-icon">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+              <h3 class="dropzone-title">Upload Excel Sheet (.xlsx, .xls, .csv)</h3>
+              <p class="dropzone-desc">Drag and drop your spreadsheet file here, or click to choose file</p>
+              <button id="btn-trigger-file-select" type="button" class="btn btn-secondary btn-sm">
+                <span>Select Excel File</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bulk Extraction Preview Section -->
+          <div id="bulk-preview-section" class="bulk-preview-section" style="display: none;">
+            <div class="bulk-preview-header">
+              <div class="preview-file-info">
+                <span class="preview-file-badge">EXTRACTED</span>
+                <span id="bulk-file-name" class="preview-filename">client_domains.xlsx</span>
+                <span id="bulk-extracted-count" class="preview-count">0 valid domains</span>
+              </div>
+              <button id="btn-cancel-bulk" type="button" class="btn btn-ghost btn-sm" title="Clear upload">&times; Clear</button>
+            </div>
+
+            <div class="table-responsive bulk-preview-table-wrap">
+              <table class="data-table" style="font-size: 0.8rem;">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Domain Name</th>
+                    <th>Category</th>
+                    <th>Price ($ USD)</th>
+                    <th>Note</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="bulk-preview-tbody">
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+
+            <div class="bulk-submit-bar">
+              <button id="btn-confirm-bulk-submit" type="button" class="btn btn-primary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span id="btn-confirm-bulk-text">Submit All Extracted Domains</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Private "My Submissions" Section (Never shared with other clients) -->
+        <div class="private-section">
+          <div class="private-header">
+            <div class="private-title-wrap">
+              <h2 class="private-title">My Submissions</h2>
+              <span class="privacy-badge">🔒 Private Account Data</span>
+            </div>
+            <span id="my-submissions-count" class="meta-count">0 domains</span>
+          </div>
+
+          <div id="my-submissions-list" class="submissions-list">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <div id="my-submissions-empty" class="empty-box">
+            <p>No domains submitted under this ID yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 2: SEPARATE ADMIN DASHBOARD           -->
+      <!-- ========================================== -->
+      <section id="view-admin" class="view-panel">
+        <!-- Admin Gate (Shown if current user is not administrator) -->
+        <div id="admin-gate" class="admin-gate-card" style="display: none;">
+          <div class="gate-icon">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2 class="gate-title">Admin Access Required</h2>
+          <p class="gate-desc">Please authenticate with administrator credentials to view all submissions.</p>
+
+          <form id="form-admin-auth" class="gate-form">
+            <div class="form-group">
+              <label for="admin-email-input" class="label">Admin Email</label>
+              <input 
+                type="email" 
+                id="admin-email-input" 
+                class="input" 
+                placeholder="admin@example.com" 
+                required 
+                autocomplete="email"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="admin-pass-input" class="label">Admin Password</label>
+              <input 
+                type="password" 
+                id="admin-pass-input" 
+                class="input" 
+                placeholder="Enter password" 
+                required 
+                autocomplete="current-password"
+              />
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">Authenticate as Admin</button>
+          </form>
+        </div>
+
+        <!-- Admin Content (Shown only to authenticated admin) -->
+        <div id="admin-content" style="display: none;">
+          <div class="admin-top-bar">
+            <div>
+              <div class="admin-status-pill">
+                <span class="live-dot"></span> Administrator Console
+              </div>
+              <h1 class="view-title">Admin Management Dashboard</h1>
+              <p class="view-desc">Master overview of all domain submissions with Low-to-High price sorting. Client privacy preserved.</p>
+            </div>
+            <div class="admin-top-actions">
+              <button id="btn-open-create-id" class="btn btn-primary btn-sm" title="Create new client ID">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="8.5" cy="7" r="4"></circle>
+                  <line x1="20" y1="8" x2="20" y2="14"></line>
+                  <line x1="23" y1="11" x2="17" y2="11"></line>
+                </svg>
+                <span>+ Create ID</span>
+              </button>
+              <button id="btn-view-client-ids" class="btn btn-secondary btn-sm" title="View all registered Client IDs">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>Client Accounts (<span id="count-client-ids">2</span>)</span>
+              </button>
+              <button id="btn-export-csv" class="btn btn-secondary btn-sm" title="Download CSV spreadsheet">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Export CSV</span>
+              </button>
+              <button id="btn-reset-demo" class="btn btn-ghost btn-sm" title="Restore sample test records">
+                <span>Reset Demo</span>
+              </button>
+              <button id="btn-lock-admin" class="btn btn-ghost btn-sm" title="Lock admin dashboard">
+                <span>Lock Console</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Minimal KPI Stats Bar -->
+          <div class="stats-bar">
+            <div class="stat-item">
+              <span class="stat-title">Total Submissions</span>
+              <span class="stat-number" id="kpi-count">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-title">Portfolio Value</span>
+              <span class="stat-number" id="kpi-value">$0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-title">Lowest Asking Price</span>
+              <span class="stat-number accent" id="kpi-lowest">$0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-title">Average Price</span>
+              <span class="stat-number" id="kpi-average">$0</span>
+            </div>
+          </div>
+
+          <!-- Admin Toolbar: Search, Filters, and "Price: Low to High" Sort -->
+          <div class="admin-toolbar">
+            <div class="search-box">
+              <input 
+                type="text" 
+                id="admin-search" 
+                class="input input-sm" 
+                placeholder="Search domain, client reference, category, or note..." 
+              />
+            </div>
+
+            <div class="toolbar-controls">
+              <!-- Low to High Filter / Sort (Explicitly requested!) -->
+              <div class="control-group">
+                <label for="admin-sort-select" class="control-label">Price Sort:</label>
+                <select id="admin-sort-select" class="select input-sm">
+                  <option value="price-asc" selected>💰 Price: Low to High</option>
+                  <option value="price-desc">💎 Price: High to Low</option>
+                  <option value="name-asc">🔤 Domain: A to Z</option>
+                  <option value="date-newest">⚡ Newest First</option>
+                  <option value="date-oldest">📅 Oldest First</option>
+                </select>
+              </div>
+
+              <!-- Status Filter -->
+              <div class="control-group">
+                <label for="admin-status-filter" class="control-label">Status:</label>
+                <select id="admin-status-filter" class="select input-sm">
+                  <option value="all">All Statuses</option>
+                  <option value="Available">Available</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Sold">Sold</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Admin Master Table (Fixed Anonymized Client Reference - Zero Email Sharing!) -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Domain Name</th>
+                    <th>Category</th>
+                    <th class="active-col">Price ($) <span>▲</span></th>
+                    <th>Client Email</th>
+                    <th>Note</th>
+                    <th>Submitted</th>
+                    <th>Status</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-table-body">
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <span id="admin-count-label">Showing 0 domains</span>
+              <span class="table-hint">Client personal data is protected and kept private.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-wrap">
+        <span>DomainPortal • Minimal Multi-User Domain Vault</span>
+        <span>Low-to-High Price Filter • Zero Data Sharing</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- EDIT MODAL (ADMIN)                         -->
+  <!-- ========================================== -->
+  <div id="modal-edit" class="modal-backdrop" aria-hidden="true" role="dialog">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Domain Record</h3>
+        <button type="button" class="modal-close" data-close-modal>&times;</button>
+      </div>
+      <form id="form-edit" class="modal-form">
+        <input type="hidden" id="edit-id" />
+
+        <div class="form-group">
+          <label for="edit-domain" class="label">Domain Name</label>
+          <input type="text" id="edit-domain" class="input mono" required />
+        </div>
+
+        <div class="form-group">
+          <label for="edit-category" class="label">Category</label>
+          <textarea id="edit-category" class="input textarea-sm" rows="2" required></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-price" class="label">Price ($ USD)</label>
+            <input type="number" id="edit-price" class="input" min="1" required />
+          </div>
+          <div class="form-group">
+            <label for="edit-status" class="label">Status</label>
+            <select id="edit-status" class="select">
+              <option value="Available">Available</option>
+              <option value="Pending">Pending</option>
+              <option value="Sold">Sold</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-note" class="label">Note (Optional)</label>
+          <textarea id="edit-note" class="input textarea-md" rows="3"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- CREATE ID MODAL (ADMIN DASHBOARD ONLY)     -->
+  <!-- ========================================== -->
+  <div id="modal-create-id" class="modal-backdrop" aria-hidden="true" role="dialog">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">Create Client ID</h3>
+          <p style="font-size: 0.775rem; color: var(--text-muted); margin-top: 2px;">Only administrators can provision new client accounts.</p>
+        </div>
+        <button type="button" class="modal-close" data-close-modal>&times;</button>
+      </div>
+      <form id="form-admin-create-id" class="modal-form">
+        <div class="form-group">
+          <label for="new-client-email" class="label">Client Email <span class="req">*</span></label>
+          <input 
+            type="email" 
+            id="new-client-email" 
+            class="input" 
+            placeholder="client@example.com" 
+            required 
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="new-client-password" class="label">Password <span class="req">*</span></label>
+          <input 
+            type="password" 
+            id="new-client-password" 
+            class="input" 
+            minlength="4" 
+            placeholder="At least 4 characters" 
+            required 
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="new-client-name" class="label">Client Name (Optional)</label>
+          <input 
+            type="text" 
+            id="new-client-name" 
+            class="input" 
+            placeholder="e.g. Vance Media" 
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Create ID & Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- CLIENT ACCOUNTS LIST MODAL (ADMIN ONLY)   -->
+  <!-- ========================================== -->
+  <div id="modal-client-ids" class="modal-backdrop" aria-hidden="true" role="dialog">
+    <div class="modal-box" style="max-width: 560px;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">Registered Client Accounts</h3>
+          <p style="font-size: 0.775rem; color: var(--text-muted); margin-top: 2px;">All active accounts authorized to submit domains.</p>
+        </div>
+        <button type="button" class="modal-close" data-close-modal>&times;</button>
+      </div>
+
+      <div class="modal-body" style="margin: 1rem 0;">
+        <div class="table-responsive">
+          <table class="data-table" style="font-size: 0.8rem;">
+            <thead>
+              <tr>
+                <th>Email Name</th>
+                <th>Role</th>
+                <th>Domains</th>
+                <th class="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="client-ids-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button type="button" id="btn-quick-add-from-list" class="btn btn-primary btn-sm">+ Add Another ID</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
