@@ -1,338 +1,149 @@
 import * as XLSX from "xlsx";
 
 /**
- * DomainPortal - Core Application Logic
+ * DomainPortal - Enterprise-Grade Secure Client Architecture
+ * 
+ * Security Implementation:
+ * - ZERO hardcoded credentials or user accounts in source code.
+ * - ZERO sensitive data or passwords in localStorage.
+ * - Server-side authentication with salted bcrypt hashes and HttpOnly session cookies.
+ * - Cryptographic JWT role verification on every API transaction.
+ * - Strict server-side multi-tenancy isolation (clients only receive their own records).
  */
 
-const STORAGE_KEY = "domain_portal_records_v5";
-const USERS_KEY = "domain_portal_users_v5";
-const CURRENT_USER_KEY = "domain_portal_active_user_v5";
 const THEME_KEY = "domain_theme_pref";
 
 // =============================================================================
-// PRE-SEEDED ACCOUNTS (Includes required admin7@gmail.com)
+// API CLIENT
 // =============================================================================
-const DEFAULT_USERS = [
-  {
-    id: "usr_admin",
-    name: "Administrator",
-    clientRef: "Admin",
-    email: "admin7@gmail.com",
-    password: "admin123",
-    role: "admin"
-  },
-  {
-    id: "usr_104",
-    name: "Client Alpha",
-    clientRef: "Client #104",
-    email: "alex@vancemedia.com",
-    password: "user123",
-    role: "user"
-  },
-  {
-    id: "usr_208",
-    name: "Client Beta",
-    clientRef: "Client #208",
-    email: "sarah@matrixai.io",
-    password: "user123",
-    role: "user"
-  }
-];
-
-// Initial domain submissions tagged with fixed clientRef (Zero email leak!)
-const SAMPLE_DOMAINS = [
-  {
-    id: "dom-1",
-    clientRef: "Client #104",
-    userEmail: "alex@vancemedia.com",
-    name: "swiftloan.net",
-    category: "Personal Lending & Micro-Finance",
-    price: 450,
-    note: "Instant auth-code transfer, registered at Namecheap.",
-    status: "Available",
-    dateAdded: "2026-10-01"
-  },
-  {
-    id: "dom-2",
-    clientRef: "Client #208",
-    userEmail: "sarah@matrixai.io",
-    name: "botflow.dev",
-    category: "Developer Tools & RPA Automation",
-    price: 650,
-    note: "HSTS preloaded extension, perfect for workflow bots.",
-    status: "Available",
-    dateAdded: "2026-10-03"
-  },
-  {
-    id: "dom-3",
-    clientRef: "Client #104",
-    userEmail: "alex@vancemedia.com",
-    name: "cloudforge.tech",
-    category: "Cloud Infrastructure & DevOps",
-    price: 890,
-    note: "Clean history, trademark clearance check.",
-    status: "Available",
-    dateAdded: "2026-10-05"
-  },
-  {
-    id: "dom-4",
-    clientRef: "Client #208",
-    userEmail: "sarah@matrixai.io",
-    name: "codexai.io",
-    category: "Generative AI & LLM Assistants",
-    price: 1850,
-    note: "Short developer AI brand with inbound interest.",
-    status: "Pending",
-    dateAdded: "2026-10-08"
-  },
-  {
-    id: "dom-5",
-    clientRef: "Client #104",
-    userEmail: "alex@vancemedia.com",
-    name: "biohealth.co",
-    category: "Telehealth & Preventative Medicine",
-    price: 2100,
-    note: "Concise medical-ready brand for digital clinic.",
-    status: "Available",
-    dateAdded: "2026-10-10"
-  },
-  {
-    id: "dom-6",
-    clientRef: "Client #208",
-    userEmail: "sarah@matrixai.io",
-    name: "smartkart.com",
-    category: "E-Commerce & Retail Marketplace",
-    price: 6500,
-    note: "", // Note is optional!
-    status: "Available",
-    dateAdded: "2026-10-12"
-  },
-  {
-    id: "dom-7",
-    clientRef: "Client #104",
-    userEmail: "alex@vancemedia.com",
-    name: "hyperneural.ai",
-    category: "Deep Tech & Computer Vision AI",
-    price: 14500,
-    note: "Cloudflare Registrar, Escrow inspection ready.",
-    status: "Available",
-    dateAdded: "2026-10-15"
-  },
-  {
-    id: "dom-8",
-    clientRef: "Client #208",
-    userEmail: "sarah@matrixai.io",
-    name: "quantumleap.ai",
-    category: "Quantum Computing & Frontier AI",
-    price: 65000,
-    note: "Category-defining breakthrough AI branding.",
-    status: "Available",
-    dateAdded: "2026-10-18"
-  }
-];
-
-// =============================================================================
-// USER & AUTHENTICATION MANAGER
-// =============================================================================
-class AuthManager {
-  constructor() {
-    this.users = this.loadUsers();
-    this.currentUser = this.loadCurrentUser();
-  }
-
-  loadUsers() {
-    try {
-      const stored = localStorage.getItem(USERS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn("User store load error", e);
-    }
-    this.saveUsers(DEFAULT_USERS);
-    return [...DEFAULT_USERS];
-  }
-
-  saveUsers(users) {
-    try {
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-      this.users = users;
-    } catch (e) {
-      console.error("Save users error", e);
-    }
-  }
-
-  loadCurrentUser() {
-    try {
-      const stored = localStorage.getItem(CURRENT_USER_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (e) {
-      console.warn("Active user load error", e);
-    }
-    // MANDATORY AUTHENTICATION: Return null when app opens so sign in is required!
-    return null;
-  }
-
-  saveCurrentUser(user) {
-    try {
-      if (user) {
-        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-      } else {
-        localStorage.removeItem(CURRENT_USER_KEY);
-      }
-      this.currentUser = user;
-    } catch (e) {
-      console.error("Save active user error", e);
-    }
-  }
-
-  login(email, password) {
-    const cleanEmail = email.trim().toLowerCase();
-    const user = this.users.find(
-      (u) => u.email.toLowerCase() === cleanEmail && u.password === password
-    );
-    if (!user) {
-      return { success: false, message: "Invalid email or password." };
-    }
-    this.saveCurrentUser(user);
-    return { success: true, user };
-  }
-
-  createUserByAdmin(name, email, password) {
-    const cleanEmail = email.trim().toLowerCase();
-    const exists = this.users.some((u) => u.email.toLowerCase() === cleanEmail);
-    if (exists) {
-      return { success: false, message: "An account with this email already exists." };
-    }
-    const isSpecialAdmin = cleanEmail === "admin7@gmail.com";
-    const refNum = Math.floor(100 + Math.random() * 900);
-    const newUser = {
-      id: "usr_" + Date.now().toString(36),
-      name: name.trim() || `Client #${refNum}`,
-      clientRef: isSpecialAdmin ? "Admin" : `Client #${refNum}`,
-      email: cleanEmail,
-      password,
-      role: isSpecialAdmin ? "admin" : "user",
-      createdAt: new Date().toISOString().split("T")[0]
+const api = {
+  async request(endpoint, options = {}) {
+    const defaultHeaders = {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
     };
 
-    const updated = [...this.users, newUser];
-    this.saveUsers(updated);
-    // Keep currently logged-in administrator active
-    return { success: true, user: newUser };
-  }
-
-  deleteUserByAdmin(userId) {
-    const user = this.users.find((u) => u.id === userId);
-    if (!user) return { success: false, message: "User not found." };
-    if (user.email === "admin7@gmail.com") {
-      return { success: false, message: "Cannot delete master administrator account." };
-    }
-    const updated = this.users.filter((u) => u.id !== userId);
-    this.saveUsers(updated);
-    return { success: true };
-  }
-
-  logout() {
-    this.saveCurrentUser(null);
-  }
-
-  isAdmin() {
-    return this.currentUser && (this.currentUser.role === "admin" || this.currentUser.email === "admin7@gmail.com");
-  }
-}
-
-const auth = new AuthManager();
-
-// =============================================================================
-// DOMAIN DATA STORE
-// =============================================================================
-class DomainStore {
-  constructor() {
-    this.domains = this.load();
-  }
-
-  load() {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
+    const config = {
+      ...options,
+      credentials: "include", // Transmit HttpOnly authentication cookie
+      headers: {
+        ...defaultHeaders,
+        ...(options.headers || {})
       }
-    } catch (e) {
-      console.warn("Domain storage load error", e);
-    }
-    this.save(SAMPLE_DOMAINS);
-    return [...SAMPLE_DOMAINS];
-  }
-
-  save(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      this.domains = data;
-    } catch (e) {
-      console.error("Storage save error", e);
-    }
-  }
-
-  add(domainData) {
-    const clientRef = auth.currentUser ? (auth.currentUser.clientRef || "Client") : "Client";
-    const userEmail = auth.currentUser ? auth.currentUser.email : "";
-
-    const newDomain = {
-      id: "dom-" + Date.now().toString(36),
-      clientRef, // Fixed anonymized client reference - no email leak!
-      userEmail, // Kept internal for filtering client's own domains
-      dateAdded: new Date().toISOString().split("T")[0],
-      status: "Available",
-      ...domainData
     };
-    const updated = [newDomain, ...this.domains];
-    this.save(updated);
-    return newDomain;
+
+    try {
+      const response = await fetch(endpoint, config);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
+      }
+
+      return data;
+    } catch (err) {
+      console.warn(`[API Error] ${endpoint}:`, err.message);
+      throw err;
+    }
+  },
+
+  async checkStatus() {
+    return this.request("/api/status");
+  },
+
+  async checkAuth() {
+    try {
+      const res = await this.request("/api/auth/me");
+      return res.user;
+    } catch {
+      return null;
+    }
+  },
+
+  async login(email, password) {
+    return this.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+  },
+
+  async setupFirstAdmin(name, email, password) {
+    return this.request("/api/auth/setup-first-admin", {
+      method: "POST",
+      body: JSON.stringify({ name, email, password })
+    });
+  },
+
+  async logout() {
+    return this.request("/api/auth/logout", {
+      method: "POST"
+    });
+  },
+
+  // Client tenant domain operations
+  async getMyDomains() {
+    return this.request("/api/domains");
+  },
+
+  async submitDomain(data) {
+    return this.request("/api/domains", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+  },
+
+  async submitBulkDomains(domains) {
+    return this.request("/api/domains/bulk", {
+      method: "POST",
+      body: JSON.stringify({ domains })
+    });
+  },
+
+  // Admin operations
+  async getAdminDomains() {
+    return this.request("/api/admin/domains");
+  },
+
+  async updateDomain(id, data) {
+    return this.request(`/api/admin/domains/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data)
+    });
+  },
+
+  async deleteDomain(id) {
+    return this.request(`/api/admin/domains/${id}`, {
+      method: "DELETE"
+    });
+  },
+
+  async getAdminClients() {
+    return this.request("/api/admin/clients");
+  },
+
+  async createClientAccount(data) {
+    return this.request("/api/admin/clients", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+  },
+
+  async deleteClientAccount(id) {
+    return this.request(`/api/admin/clients/${id}`, {
+      method: "DELETE"
+    });
   }
+};
 
-  addBatch(domainsList) {
-    const clientRef = auth.currentUser ? (auth.currentUser.clientRef || "Client") : "Client";
-    const userEmail = auth.currentUser ? auth.currentUser.email : "";
-    const today = new Date().toISOString().split("T")[0];
-
-    const newDomains = domainsList.map((domainData, idx) => ({
-      id: "dom-" + Date.now().toString(36) + "-" + idx,
-      clientRef,
-      userEmail,
-      dateAdded: today,
-      status: "Available",
-      ...domainData
-    }));
-
-    const updated = [...newDomains, ...this.domains];
-    this.save(updated);
-    return newDomains;
-  }
-
-  update(id, fields) {
-    const updated = this.domains.map((d) => (d.id === id ? { ...d, ...fields } : d));
-    this.save(updated);
-    return updated.find((d) => d.id === id);
-  }
-
-  delete(id) {
-    const updated = this.domains.filter((d) => d.id !== id);
-    this.save(updated);
-    return updated;
-  }
-
-  reset() {
-    this.save([...SAMPLE_DOMAINS]);
-    return this.domains;
-  }
-}
-
-const store = new DomainStore();
+// =============================================================================
+// RUNTIME STATE (Purely in-memory, zero credentials or other tenants' data)
+// =============================================================================
+const state = {
+  currentUser: null,
+  myDomains: [],
+  adminDomains: [],
+  clients: []
+};
 
 // =============================================================================
 // DOM ELEMENT REFERENCES
@@ -343,6 +154,7 @@ const elements = {
   formMandatoryLogin: document.getElementById("form-mandatory-login"),
   gateLoginEmail: document.getElementById("gate-login-email"),
   gateLoginPassword: document.getElementById("gate-login-password"),
+  authSubText: document.getElementById("auth-sub-text"),
 
   // Main App Wrapper
   mainAppWrapper: document.getElementById("main-app-wrapper"),
@@ -400,7 +212,7 @@ const elements = {
   adminPassInput: document.getElementById("admin-pass-input"),
   btnLockAdmin: document.getElementById("btn-lock-admin"),
 
-  // Admin User Provisioning (Only Admin can add new ID)
+  // Admin User Provisioning
   btnOpenCreateId: document.getElementById("btn-open-create-id"),
   btnViewClientIds: document.getElementById("btn-view-client-ids"),
   countClientIds: document.getElementById("count-client-ids"),
@@ -444,6 +256,7 @@ const elements = {
 // TOAST NOTIFICATIONS & HELPERS
 // =============================================================================
 function showToast(message) {
+  if (!elements.toastContainer) return;
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.textContent = message;
@@ -483,45 +296,71 @@ function getInitials(email) {
   return (namePart[0] || "U").toUpperCase();
 }
 
+function isAdminUser() {
+  return state.currentUser && state.currentUser.role === "admin";
+}
+
 // =============================================================================
-// MANDATORY AUTH SCREEN SYNC
+// APP STATE SYNCHRONIZATION
 // =============================================================================
-function syncAppState() {
-  const user = auth.currentUser;
+async function syncAppState() {
+  // Clear any legacy insecure localStorage data if present
+  try {
+    localStorage.removeItem("domain_portal_records_v5");
+    localStorage.removeItem("domain_portal_users_v5");
+    localStorage.removeItem("domain_portal_active_user_v5");
+  } catch {
+    // Ignore
+  }
+
+  // Check with server for authenticated session
+  const user = await api.checkAuth();
+  state.currentUser = user;
 
   if (!user) {
-    // MANDATORY AUTH GATE: Show sign in screen first on launch!
+    // Check if initial admin setup is required
+    try {
+      const status = await api.checkStatus();
+      if (!status.hasAdmin) {
+        if (elements.authSubText) {
+          elements.authSubText.innerHTML = `⚠️ <strong>Initial Setup Required:</strong> Run <code>npm run create-admin</code> in terminal to set up the master administrator.`;
+        }
+      } else {
+        if (elements.authSubText) {
+          elements.authSubText.textContent = "Sign in to your account";
+        }
+      }
+    } catch {
+      // Backend may be starting
+    }
+
     elements.mandatoryAuthScreen.style.display = "flex";
     elements.mainAppWrapper.style.display = "none";
     return;
   }
 
-  // User is authenticated: Hide gate, show app!
+  // User is authenticated by backend
   elements.mandatoryAuthScreen.style.display = "none";
   elements.mainAppWrapper.style.display = "flex";
 
-  // PRIVACY: Header displays anonymized Client Ref (NO raw personal email!)
-  const isAdm = auth.isAdmin();
-  elements.headerUserLabel.textContent = isAdm ? "Administrator" : user.email;
+  const isAdm = isAdminUser();
+  elements.headerUserLabel.textContent = isAdm ? (user.name || "Administrator") : user.email;
   elements.headerUserAvatar.textContent = isAdm ? "AD" : getInitials(user.email);
 
-  // Check admin gate
   syncAdminGate();
 
-  // Render current views
-  renderClientSubmissions();
-  updateMetrics();
+  // Load client's own domains from server
+  await loadClientSubmissions();
 
   if (isAdm) {
-    renderAdminTable();
+    await loadAdminData();
   }
 }
 
 function syncAdminGate() {
-  if (auth.isAdmin()) {
+  if (isAdminUser()) {
     elements.adminGate.style.display = "none";
     elements.adminContent.style.display = "block";
-    renderAdminTable();
   } else {
     elements.adminGate.style.display = "block";
     elements.adminContent.style.display = "none";
@@ -529,17 +368,20 @@ function syncAdminGate() {
 }
 
 // =============================================================================
-// SUBMISSION PORTAL (CLIENT PRIVACY: ONLY CURRENT USER'S DATA)
+// CLIENT SUBMISSIONS (Multi-Tenancy Protected)
 // =============================================================================
+async function loadClientSubmissions() {
+  try {
+    const list = await api.getMyDomains();
+    state.myDomains = Array.isArray(list) ? list : [];
+    renderClientSubmissions();
+  } catch (err) {
+    showToast("Failed to load your submissions: " + err.message);
+  }
+}
+
 function renderClientSubmissions() {
-  const user = auth.currentUser;
-  const userEmail = user ? user.email.toLowerCase() : "";
-
-  // STRICT PRIVACY: Clients only see domains submitted under their account!
-  const myDomains = userEmail
-    ? store.domains.filter((d) => (d.userEmail || "").toLowerCase() === userEmail)
-    : [];
-
+  const myDomains = state.myDomains;
   elements.mySubmissionsCount.textContent = `${myDomains.length} domain${myDomains.length === 1 ? "" : "s"}`;
 
   if (myDomains.length === 0) {
@@ -568,38 +410,43 @@ function renderClientSubmissions() {
           <div class="sub-right">
             <div>
               <div class="sub-price">$${Number(dom.price).toLocaleString()}</div>
-              <span class="sub-status ${statusClass}">${dom.status}</span>
+              <span class="sub-status ${statusClass}">${escapeHtml(dom.status)}</span>
             </div>
-            <button class="action-btn delete btn-delete-mine" data-id="${dom.id}" title="Delete submission">&times;</button>
           </div>
         </div>
       `;
     })
     .join("");
-
-  // Delete handler for client's own domains
-  elements.mySubmissionsList.querySelectorAll(".btn-delete-mine").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.id;
-      store.delete(id);
-      renderClientSubmissions();
-      if (auth.isAdmin()) renderAdminTable();
-      updateMetrics();
-      showToast("Domain removed from your submissions");
-    });
-  });
 }
 
 // =============================================================================
-// ADMIN DASHBOARD (ADMIN SEES ALL DATA WITH LOW-TO-HIGH PRICE FILTER)
+// ADMIN DASHBOARD (Server-Guarded Admin Only)
 // =============================================================================
+async function loadAdminData() {
+  if (!isAdminUser()) return;
+
+  try {
+    const [domains, clients] = await Promise.all([
+      api.getAdminDomains(),
+      api.getAdminClients()
+    ]);
+    state.adminDomains = Array.isArray(domains) ? domains : [];
+    state.clients = Array.isArray(clients) ? clients : [];
+
+    updateMetrics();
+    renderAdminTable();
+    renderAdminClientIds();
+  } catch (err) {
+    console.error("Admin data load error:", err);
+  }
+}
+
 function getFilteredAdminDomains() {
   const q = elements.adminSearch.value.trim().toLowerCase();
   const status = elements.adminStatusFilter.value;
   const sort = elements.adminSortSelect.value;
 
-  // 1. Filter
-  let list = store.domains.filter((item) => {
+  let list = state.adminDomains.filter((item) => {
     if (q) {
       const matchName = item.name.toLowerCase().includes(q);
       const matchCat = (item.category || "").toLowerCase().includes(q);
@@ -616,12 +463,12 @@ function getFilteredAdminDomains() {
     return true;
   });
 
-  // 2. Sort: Default & Highlight is Price: Low to High!
+  // Sort: Default is Price: Low to High
   switch (sort) {
-    case "price-asc": // LOW TO HIGH PRICE
+    case "price-asc":
       list.sort((a, b) => Number(a.price) - Number(b.price));
       break;
-    case "price-desc": // HIGH TO LOW PRICE
+    case "price-desc":
       list.sort((a, b) => Number(b.price) - Number(a.price));
       break;
     case "name-asc":
@@ -641,14 +488,14 @@ function getFilteredAdminDomains() {
 }
 
 function renderAdminClientIds() {
-  const users = auth.users.filter((u) => u.role !== "admin" && u.email !== "admin7@gmail.com");
+  const clients = state.clients.filter((u) => u.role !== "admin");
   if (elements.countClientIds) {
-    elements.countClientIds.textContent = users.length;
+    elements.countClientIds.textContent = clients.length;
   }
 
   if (!elements.clientIdsTableBody) return;
 
-  if (users.length === 0) {
+  if (clients.length === 0) {
     elements.clientIdsTableBody.innerHTML = `
       <tr>
         <td colspan="4" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">
@@ -659,11 +506,9 @@ function renderAdminClientIds() {
     return;
   }
 
-  elements.clientIdsTableBody.innerHTML = users
+  elements.clientIdsTableBody.innerHTML = clients
     .map((u) => {
-      const domCount = store.domains.filter(
-        (d) => (d.userEmail || "").toLowerCase() === u.email.toLowerCase()
-      ).length;
+      const domCount = u.domain_count || 0;
 
       return `
         <tr data-user-id="${u.id}">
@@ -672,7 +517,7 @@ function renderAdminClientIds() {
             ${u.name ? `<div style="font-size: 0.725rem; color: var(--text-muted);">${escapeHtml(u.name)}</div>` : ""}
           </td>
           <td>
-            <span class="client-ref-badge">CLIENT</span>
+            <span class="client-ref-badge">${escapeHtml(u.client_ref || "CLIENT")}</span>
           </td>
           <td>
             <span style="font-weight: 600;">${domCount} domain${domCount === 1 ? "" : "s"}</span>
@@ -688,26 +533,27 @@ function renderAdminClientIds() {
     .join("");
 
   elements.clientIdsTableBody.querySelectorAll(".btn-delete-user").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const uid = btn.dataset.id;
       const uemail = btn.dataset.email;
       if (confirm(`Revoke access and delete account for "${uemail}"?`)) {
-        auth.deleteUserByAdmin(uid);
-        renderAdminClientIds();
-        renderAdminTable();
-        showToast(`Account "${uemail}" deleted`);
+        try {
+          await api.deleteClientAccount(uid);
+          await loadAdminData();
+          showToast(`Account "${uemail}" deleted`);
+        } catch (err) {
+          alert("Error deleting account: " + err.message);
+        }
       }
     });
   });
 }
 
 function renderAdminTable() {
-  if (!auth.isAdmin()) return;
-
-  renderAdminClientIds();
+  if (!isAdminUser()) return;
 
   const list = getFilteredAdminDomains();
-  elements.adminCountLabel.textContent = `Showing ${list.length} of ${store.domains.length} domains`;
+  elements.adminCountLabel.textContent = `Showing ${list.length} of ${state.adminDomains.length} domains`;
 
   if (list.length === 0) {
     elements.adminTableBody.innerHTML = `
@@ -720,7 +566,6 @@ function renderAdminTable() {
     return;
   }
 
-  // Displaying Fixed Anonymized Client Reference (Zero email sharing!)
   elements.adminTableBody.innerHTML = list
     .map((dom) => {
       const statusClass =
@@ -742,7 +587,7 @@ function renderAdminTable() {
             <span class="td-price">$${Number(dom.price).toLocaleString()}</span>
           </td>
           <td>
-            <span class="client-ref-badge">${escapeHtml(dom.userEmail || dom.clientRef || "user@example.com")}</span>
+            <span class="client-ref-badge">${escapeHtml(dom.clientRef || dom.userEmail || "Client")}</span>
           </td>
           <td>
             <div class="td-note" title="${escapeHtml(dom.note || 'None')}">${escapeHtml(dom.note || '-')}</div>
@@ -770,7 +615,7 @@ function renderAdminTable() {
 function attachAdminRowActions() {
   elements.adminTableBody.querySelectorAll(".btn-edit").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const dom = store.domains.find((d) => d.id === btn.dataset.id);
+      const dom = state.adminDomains.find((d) => d.id === btn.dataset.id);
       if (!dom) return;
 
       elements.editId.value = dom.id;
@@ -785,22 +630,25 @@ function attachAdminRowActions() {
   });
 
   elements.adminTableBody.querySelectorAll(".btn-delete").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const id = btn.dataset.id;
       const name = btn.dataset.name;
       if (confirm(`Delete "${name}" from database?`)) {
-        store.delete(id);
-        renderAdminTable();
-        renderClientSubmissions();
-        updateMetrics();
-        showToast(`Deleted ${name}`);
+        try {
+          await api.deleteDomain(id);
+          await loadAdminData();
+          await loadClientSubmissions();
+          showToast(`Deleted ${name}`);
+        } catch (err) {
+          alert("Failed to delete domain: " + err.message);
+        }
       }
     });
   });
 }
 
 function updateMetrics() {
-  const all = store.domains;
+  const all = state.adminDomains;
   const count = all.length;
   const totalVal = all.reduce((acc, curr) => acc + Number(curr.price || 0), 0);
   const avg = count > 0 ? Math.round(totalVal / count) : 0;
@@ -815,13 +663,13 @@ function updateMetrics() {
 }
 
 function exportCsv() {
-  const domains = store.domains;
-  const headers = ["Domain Name", "Category", "Price USD", "Client Email", "Status", "Note", "Submission Date"];
+  const domains = state.adminDomains;
+  const headers = ["Domain Name", "Category", "Price USD", "Client Reference", "Status", "Note", "Submission Date"];
   const rows = domains.map((d) => [
     `"${d.name.replace(/"/g, '""')}"`,
     `"${d.category.replace(/"/g, '""')}"`,
     d.price,
-    `"${(d.userEmail || d.clientRef || "").replace(/"/g, '""')}"`,
+    `"${(d.clientRef || "").replace(/"/g, '""')}"`,
     `"${d.status.replace(/"/g, '""')}"`,
     `"${(d.note || "").replace(/"/g, '""')}"`,
     `"${d.dateAdded || ""}"`
@@ -835,11 +683,9 @@ function exportCsv() {
 }
 
 // =============================================================================
-// BULK EXCEL UPLOAD & DEMO SHEET LOGIC
+// BULK EXCEL UPLOAD LOGIC
 // =============================================================================
 let extractedBulkDomains = [];
-
-const TEMPLATE_HEADERS = [["Domain Name", "Category", "Price", "Note"]];
 
 function triggerBlobDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -850,220 +696,174 @@ function triggerBlobDownload(blob, filename) {
   document.body.appendChild(tempLink);
   tempLink.click();
   setTimeout(() => {
-    if (tempLink.parentNode) {
-      tempLink.parentNode.removeChild(tempLink);
-    }
-    URL.revokeObjectURL(url);
-  }, 1200);
-}
-
-function fallbackFileDownload(url, filename) {
-  const tempLink = document.createElement("a");
-  tempLink.style.display = "none";
-  tempLink.href = url;
-  tempLink.setAttribute("download", filename);
-  document.body.appendChild(tempLink);
-  tempLink.click();
-  setTimeout(() => {
-    if (tempLink.parentNode) {
-      tempLink.parentNode.removeChild(tempLink);
-    }
-  }, 500);
+    document.body.removeChild(tempLink);
+    window.URL.revokeObjectURL(url);
+  }, 100);
 }
 
 function downloadDemoExcelSheet(e) {
-  if (e && typeof e.preventDefault === "function") {
-    e.preventDefault();
-  }
-  showToast("Generating Template Excel Sheet (.xlsx)...");
+  e.preventDefault();
+  const demoRows = [
+    { "Domain Name": "swiftloan.net", "Category": "Personal Lending & Micro-Finance", "Price": 450, "Note": "Instant auth-code transfer, registered at Namecheap." },
+    { "Domain Name": "botflow.dev", "Category": "Developer Tools & RPA Automation", "Price": 650, "Note": "HSTS preloaded extension, perfect for workflow bots." },
+    { "Domain Name": "cloudforge.tech", "Category": "Cloud Infrastructure & DevOps", "Price": 890, "Note": "Clean history, trademark clearance check." },
+    { "Domain Name": "codexai.io", "Category": "Generative AI & LLM Assistants", "Price": 1850, "Note": "Short developer AI brand with inbound interest." },
+    { "Domain Name": "biohealth.co", "Category": "Telehealth & Preventative Medicine", "Price": 2100, "Note": "Concise medical-ready brand for digital clinic." },
+    { "Domain Name": "smartkart.com", "Category": "E-Commerce & Retail Marketplace", "Price": 6500, "Note": "" },
+    { "Domain Name": "hyperneural.ai", "Category": "Deep Tech & Computer Vision AI", "Price": 14500, "Note": "Cloudflare Registrar, Escrow inspection ready." },
+    { "Domain Name": "quantumleap.ai", "Category": "Quantum Computing & Frontier AI", "Price": 65000, "Note": "Category-defining breakthrough AI branding." }
+  ];
 
-  try {
-    const worksheet = XLSX.utils.aoa_to_sheet(TEMPLATE_HEADERS);
-    worksheet["!cols"] = [
-      { wch: 25 }, // Domain Name
-      { wch: 32 }, // Category
-      { wch: 15 }, // Price
-      { wch: 40 }  // Note
-    ];
+  const ws = XLSX.utils.json_to_sheet(demoRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Domains");
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Domains");
-
-    const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([wbout], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    });
-
-    triggerBlobDownload(blob, "demo_domains_template.xlsx");
-    showToast("Template Excel Sheet (.xlsx) downloaded successfully!");
-  } catch (err) {
-    console.warn("Direct XLSX generation error, attempting fallback download:", err);
-    fallbackFileDownload("./demo_domains_template.xlsx", "demo_domains_template.xlsx");
-  }
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  triggerBlobDownload(blob, "demo_domains_template.xlsx");
+  showToast("Downloaded demo Excel template");
 }
 
 function downloadDemoCsvSheet(e) {
-  if (e && typeof e.preventDefault === "function") {
-    e.preventDefault();
-  }
-  showToast("Generating Template CSV Sheet (.csv)...");
+  e.preventDefault();
+  const headers = ["Domain Name", "Category", "Price", "Note"];
+  const demoRows = [
+    ["swiftloan.net", "Personal Lending & Micro-Finance", 450, "Instant auth-code transfer, registered at Namecheap."],
+    ["botflow.dev", "Developer Tools & RPA Automation", 650, "HSTS preloaded extension, perfect for workflow bots."],
+    ["cloudforge.tech", "Cloud Infrastructure & DevOps", 890, "Clean history, trademark clearance check."],
+    ["codexai.io", "Generative AI & LLM Assistants", 1850, "Short developer AI brand with inbound interest."],
+    ["biohealth.co", "Telehealth & Preventative Medicine", 2100, "Concise medical-ready brand for digital clinic."],
+    ["smartkart.com", "E-Commerce & Retail Marketplace", 6500, ""],
+    ["hyperneural.ai", "Deep Tech & Computer Vision AI", 14500, "Cloudflare Registrar, Escrow inspection ready."],
+    ["quantumleap.ai", "Quantum Computing & Frontier AI", 65000, "Category-defining breakthrough AI branding."]
+  ];
 
-  try {
-    const headers = ["Domain Name", "Category", "Price", "Note"];
-    const csvText = "\uFEFF" + headers.join(",") + "\r\n";
-    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+  const csvRows = [headers.join(",")];
+  demoRows.forEach((r) => {
+    csvRows.push(r.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","));
+  });
 
-    triggerBlobDownload(blob, "demo_domains_template.csv");
-    showToast("Template CSV Sheet (.csv) downloaded successfully!");
-  } catch (err) {
-    console.warn("Direct CSV generation error, attempting fallback download:", err);
-    fallbackFileDownload("./demo_domains_template.csv", "demo_domains_template.csv");
-  }
-}
-
-function extractDomainRow(row) {
-  let name = "";
-  let category = "";
-  let price = 0;
-  let note = "";
-
-  for (const [key, val] of Object.entries(row)) {
-    const k = key.trim().toLowerCase();
-    const strVal = String(val ?? "").trim();
-
-    if (/domain|name|website|url|item/.test(k) && !name) {
-      name = cleanDomainName(strVal);
-    } else if (/cat|niche|sector|industry|type|topic|tag|genre|vertical/.test(k) && !category) {
-      category = strVal;
-    } else if (/price|cost|usd|amount|val|fee|rate|ask|quote|\$/.test(k) && !price) {
-      const num = parseFloat(strVal.replace(/[^0-9.-]+/g, ""));
-      if (!isNaN(num) && num > 0) price = num;
-    } else if (/note|detail|desc|comment|registrar|remark|info|memo|message/.test(k) && !note) {
-      note = strVal;
-    }
-  }
-
-  // Fallback 1: If name not found by header, inspect values for a domain-like string (has dot, no spaces)
-  if (!name) {
-    for (const [key, val] of Object.entries(row)) {
-      const strVal = String(val ?? "").trim();
-      if (strVal.includes(".") && !strVal.includes(" ") && strVal.length >= 4) {
-        name = cleanDomainName(strVal);
-        break;
-      }
-    }
-  }
-
-  // Fallback 2: If price not found by header, inspect values for any valid positive number
-  if (!price || price <= 0) {
-    for (const [key, val] of Object.entries(row)) {
-      const strVal = String(val ?? "").trim();
-      // Skip if this value is the domain name
-      if (cleanDomainName(strVal) === name) continue;
-      const num = parseFloat(strVal.replace(/[^0-9.-]+/g, ""));
-      if (!isNaN(num) && num > 0) {
-        price = num;
-        break;
-      }
-    }
-  }
-
-  // Fallback 3: Positional keys for un-headered or __EMPTY sheets
-  if (!name) {
-    const keys = Object.keys(row);
-    if (keys.length >= 2) {
-      const maybeName = cleanDomainName(String(row[keys[0]] || ""));
-      if (maybeName && maybeName.includes(".")) {
-        name = maybeName;
-        category = String(row[keys[1]] || "General");
-        if (keys[2]) {
-          const num = parseFloat(String(row[keys[2]] || "").replace(/[^0-9.-]+/g, ""));
-          if (!isNaN(num) && num > 0) price = num;
-        }
-        if (keys[3]) {
-          note = String(row[keys[3]] || "");
-        }
-      }
-    }
-  }
-
-  // Validation: Must have a valid name with a dot/extension and price > 0
-  if (name && name.includes(".") && price > 0) {
-    if (!category) category = "General";
-    return { name, category, price, note };
-  }
-  return null;
+  const csvContent = "\uFEFF" + csvRows.join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  triggerBlobDownload(blob, "demo_domains_template.csv");
+  showToast("Downloaded demo CSV template");
 }
 
 function handleExcelFile(file) {
   if (!file) return;
 
   const validExts = [".xlsx", ".xls", ".csv"];
-  const fileNameLower = file.name.toLowerCase();
-  const isValidExt = validExts.some((ext) => fileNameLower.endsWith(ext));
+  const fileName = file.name.toLowerCase();
+  const isValid = validExts.some((ext) => fileName.endsWith(ext));
 
-  if (!isValidExt) {
-    alert("Please upload a valid spreadsheet file (.xlsx, .xls, or .csv).");
+  if (!isValid) {
+    alert("Invalid file format. Please upload an Excel (.xlsx, .xls) or CSV file.");
     return;
   }
 
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = function (e) {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-      if (!rawRows || rawRows.length === 0) {
-        alert("The uploaded spreadsheet contains no data rows. Check the Demo Sheet for the proper format.");
-        return;
-      }
-
-      const extracted = [];
-      for (const row of rawRows) {
-        const parsed = extractDomainRow(row);
-        if (parsed) {
-          extracted.push(parsed);
-        }
-      }
-
-      if (extracted.length === 0) {
-        alert(
-          "Could not extract any valid domains from this file.\n\nPlease make sure your sheet has columns: Domain Name, Category, Price, and Note.\n\nYou can click 'Download Demo Sheet' to see the exact structure."
-        );
-        return;
-      }
-
-      extractedBulkDomains = extracted;
-      renderExtractedBulkPreview(extracted, file.name);
+      processExtractedRows(jsonRows, file.name);
     } catch (err) {
-      console.error("Error parsing Excel file:", err);
-      alert("Failed to parse the file. Please ensure it is a valid .xlsx or .csv file.");
+      console.error("Excel parse error:", err);
+      alert("Failed to parse spreadsheet: " + err.message);
     }
   };
-
   reader.readAsArrayBuffer(file);
 }
 
-function renderExtractedBulkPreview(domains, filename) {
-  if (!elements.bulkPreviewSection || !elements.bulkPreviewTbody) return;
+function processExtractedRows(rows, filename) {
+  if (!rows || rows.length < 2) {
+    alert("The uploaded spreadsheet is empty or has no data rows.");
+    return;
+  }
 
+  const headerRow = rows[0].map((h) => String(h || "").trim().toLowerCase());
+  let domainIdx = -1;
+  let categoryIdx = -1;
+  let priceIdx = -1;
+  let noteIdx = -1;
+
+  headerRow.forEach((col, idx) => {
+    if (col.includes("domain") || col.includes("name") || col.includes("url")) domainIdx = idx;
+    else if (col.includes("cat") || col.includes("niche") || col.includes("industry")) categoryIdx = idx;
+    else if (col.includes("price") || col.includes("cost") || col.includes("ask") || col.includes("usd")) priceIdx = idx;
+    else if (col.includes("note") || col.includes("desc") || col.includes("comment")) noteIdx = idx;
+  });
+
+  if (domainIdx === -1) domainIdx = 0;
+  if (categoryIdx === -1) categoryIdx = 1;
+  if (priceIdx === -1) priceIdx = 2;
+  if (noteIdx === -1) noteIdx = 3;
+
+  const validExtracted = [];
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.length === 0) continue;
+
+    const rawDomain = row[domainIdx];
+    const rawCategory = row[categoryIdx];
+    const rawPrice = row[priceIdx];
+    const rawNote = noteIdx !== -1 ? row[noteIdx] : "";
+
+    if (!rawDomain) continue;
+
+    const cleanedDomain = cleanDomainName(String(rawDomain));
+    if (!cleanedDomain || !cleanedDomain.includes(".")) continue;
+
+    let parsedPrice = 0;
+    if (typeof rawPrice === "number") {
+      parsedPrice = rawPrice;
+    } else if (rawPrice) {
+      const cleanedStr = String(rawPrice).replace(/[^0-9.]/g, "");
+      parsedPrice = Number(cleanedStr);
+    }
+
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      parsedPrice = 500;
+    }
+
+    const category = rawCategory && String(rawCategory).trim() ? String(rawCategory).trim() : "General";
+    const note = rawNote ? String(rawNote).trim() : "";
+
+    validExtracted.push({
+      name: cleanedDomain,
+      category,
+      price: parsedPrice,
+      note
+    });
+  }
+
+  if (validExtracted.length === 0) {
+    alert("Could not extract any valid domain listings from the file.");
+    return;
+  }
+
+  extractedBulkDomains = validExtracted;
+  renderBulkPreview(validExtracted, filename);
+}
+
+function renderBulkPreview(domains, filename) {
   elements.bulkFileName.textContent = filename;
-  elements.bulkExtractedCount.textContent = `${domains.length} valid domain${domains.length === 1 ? "" : "s"}`;
+  elements.bulkExtractedCount.textContent = `${domains.length} domain${domains.length === 1 ? "" : "s"} ready`;
   elements.btnConfirmBulkText.textContent = `Submit All ${domains.length} Domains`;
 
   elements.bulkPreviewTbody.innerHTML = domains
     .map(
-      (d, idx) => `
+      (d) => `
       <tr>
-        <td style="color: var(--text-muted); font-size: 0.75rem;">${idx + 1}</td>
-        <td><code style="font-family: var(--font-mono); font-weight: 600; color: var(--primary);">${escapeHtml(d.name)}</code></td>
-        <td><span style="font-weight: 500;">${escapeHtml(d.category)}</span></td>
-        <td style="font-family: var(--font-mono); font-weight: 600; color: #10b981;">$${Number(d.price).toLocaleString()}</td>
-        <td style="color: var(--text-muted); font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(d.note || "—")}</td>
-        <td><span class="status-pill status-available">Ready to Add</span></td>
+        <td style="font-weight: 600; color: var(--accent-light);">${escapeHtml(d.name)}</td>
+        <td>${escapeHtml(d.category)}</td>
+        <td style="font-weight: 600;">$${Number(d.price).toLocaleString()}</td>
+        <td style="color: var(--text-muted);">${d.note ? escapeHtml(d.note) : `<em style="color: var(--text-faint)">None</em>`}</td>
       </tr>
     `
     )
@@ -1084,31 +884,31 @@ function clearBulkUpload() {
 // EVENT LISTENERS
 // =============================================================================
 function setupEvents() {
-  // Mandatory Login Form Submit (Only Sign In is public)
-  elements.formMandatoryLogin.addEventListener("submit", (e) => {
+  // Mandatory Login Form
+  elements.formMandatoryLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = elements.gateLoginEmail.value.trim();
-    const pass = elements.gateLoginPassword.value;
+    const password = elements.gateLoginPassword.value;
 
-    const res = auth.login(email, pass);
-    if (!res.success) {
-      alert(res.message);
-      return;
-    }
+    try {
+      const res = await api.login(email, password);
+      elements.formMandatoryLogin.reset();
+      state.currentUser = res.user;
+      await syncAppState();
 
-    elements.formMandatoryLogin.reset();
-    syncAppState();
-
-    if (auth.isAdmin()) {
-      elements.tabAdmin.click();
-      showToast("Signed in as Administrator");
-    } else {
-      elements.tabPortal.click();
-      showToast(`Signed in successfully!`);
+      if (isAdminUser()) {
+        elements.tabAdmin.click();
+        showToast("Signed in as Administrator");
+      } else {
+        elements.tabPortal.click();
+        showToast("Signed in successfully!");
+      }
+    } catch (err) {
+      alert(err.message || "Invalid email or password.");
     }
   });
 
-  // Admin User Provisioning Events (Only Admin can add new ID)
+  // Admin User Provisioning Events
   if (elements.btnOpenCreateId) {
     elements.btnOpenCreateId.addEventListener("click", () => {
       elements.formAdminCreateId.reset();
@@ -1131,40 +931,47 @@ function setupEvents() {
     });
   }
 
-  // Admin Create ID Form Submit
+  // Admin Create Client Form
   if (elements.formAdminCreateId) {
-    elements.formAdminCreateId.addEventListener("submit", (e) => {
+    elements.formAdminCreateId.addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = elements.newClientEmail.value.trim();
       const password = elements.newClientPassword.value;
       const name = elements.newClientName.value.trim();
 
-      if (!email || !password) {
-        alert("Please provide both an email and password.");
+      if (!email || !password || password.length < 6) {
+        alert("Please provide a valid email and password (minimum 6 characters).");
         return;
       }
 
-      const res = auth.createUserByAdmin(name, email, password);
-      if (!res.success) {
-        alert(res.message);
-        return;
+      try {
+        await api.createClientAccount({ name, email, password });
+        elements.formAdminCreateId.reset();
+        elements.modalCreateId.classList.remove("show");
+        await loadAdminData();
+        showToast(`Client ID created for ${email}`);
+      } catch (err) {
+        alert(err.message || "Failed to create client account.");
       }
-
-      elements.formAdminCreateId.reset();
-      elements.modalCreateId.classList.remove("show");
-      renderAdminClientIds();
-      showToast(`Client ID created for ${email}`);
     });
   }
 
-  // Sign Out Button in Header
-  elements.btnLogout.addEventListener("click", () => {
-    auth.logout();
-    syncAppState();
+  // Sign Out
+  elements.btnLogout.addEventListener("click", async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Ignore
+    }
+    state.currentUser = null;
+    state.myDomains = [];
+    state.adminDomains = [];
+    state.clients = [];
+    await syncAppState();
     showToast("Signed out. App locked.");
   });
 
-  // Navigation Tabs: Submission Portal vs Admin Dashboard
+  // Navigation Tabs
   elements.tabPortal.addEventListener("click", () => {
     elements.tabPortal.classList.add("active");
     elements.tabPortal.setAttribute("aria-selected", "true");
@@ -1172,7 +979,7 @@ function setupEvents() {
     elements.tabAdmin.setAttribute("aria-selected", "false");
     elements.viewPortal.classList.add("active");
     elements.viewAdmin.classList.remove("active");
-    renderClientSubmissions();
+    loadClientSubmissions();
   });
 
   elements.tabAdmin.addEventListener("click", () => {
@@ -1182,42 +989,53 @@ function setupEvents() {
     elements.tabPortal.setAttribute("aria-selected", "false");
     elements.viewAdmin.classList.add("active");
     elements.viewPortal.classList.remove("active");
-
     syncAdminGate();
+    if (isAdminUser()) {
+      loadAdminData();
+    }
   });
 
-  // Admin In-View Gate Form (If client attempts to authenticate into Admin)
-  elements.formAdminAuth.addEventListener("submit", (e) => {
+  // Admin Re-Auth Gate Form (if needed)
+  elements.formAdminAuth.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = elements.adminEmailInput.value.trim();
     const pass = elements.adminPassInput.value;
 
-    const res = auth.login(email, pass);
-    if (!res.success || (res.user.email !== "admin7@gmail.com" && res.user.role !== "admin")) {
-      alert("Access Denied: Incorrect administrator email or password.");
+    try {
+      const res = await api.login(email, pass);
+      if (res.user.role !== "admin") {
+        alert("Access Denied: This account does not possess administrator privileges.");
+        return;
+      }
+      elements.formAdminAuth.reset();
+      state.currentUser = res.user;
+      await syncAppState();
+      showToast("Admin Dashboard Unlocked");
+    } catch (err) {
+      alert("Access Denied: " + (err.message || "Invalid credentials"));
       elements.adminPassInput.value = "";
-      return;
     }
-
-    elements.formAdminAuth.reset();
-    syncAppState();
-    showToast("Admin Dashboard Unlocked");
   });
 
-  elements.btnLockAdmin.addEventListener("click", () => {
-    auth.logout();
-    syncAppState();
+  elements.btnLockAdmin.addEventListener("click", async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Ignore
+    }
+    state.currentUser = null;
+    await syncAppState();
     showToast("Admin session locked");
   });
 
-  // Submission Portal Form Submit (NOTE IS OPTIONAL!)
-  elements.formSubmitDomain.addEventListener("submit", (e) => {
+  // Domain Submission Form (Client)
+  elements.formSubmitDomain.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const name = cleanDomainName(elements.inputDomain.value);
     const category = elements.inputCategory.value.trim();
     const price = Number(elements.inputPrice.value);
-    const note = elements.inputNote.value.trim(); // OPTIONAL
+    const note = elements.inputNote.value.trim();
 
     if (!name) {
       alert("Please enter a domain name.");
@@ -1235,18 +1053,17 @@ function setupEvents() {
       return;
     }
 
-    store.add({
-      name,
-      category,
-      price,
-      note
-    });
-
-    elements.formSubmitDomain.reset();
-    renderClientSubmissions();
-    if (auth.isAdmin()) renderAdminTable();
-    updateMetrics();
-    showToast(`Domain "${name}" submitted successfully`);
+    try {
+      await api.submitDomain({ name, category, price, note });
+      elements.formSubmitDomain.reset();
+      await loadClientSubmissions();
+      if (isAdminUser()) {
+        await loadAdminData();
+      }
+      showToast(`Domain "${name}" submitted successfully`);
+    } catch (err) {
+      alert("Failed to submit domain: " + err.message);
+    }
   });
 
   // Portal Mode Switching (Single vs Bulk)
@@ -1266,7 +1083,7 @@ function setupEvents() {
     });
   }
 
-  // Demo Excel & CSV Sheet Downloads
+  // Demo Excel & CSV Downloads
   if (elements.btnDownloadDemoSheet) {
     elements.btnDownloadDemoSheet.addEventListener("click", downloadDemoExcelSheet);
   }
@@ -1286,7 +1103,7 @@ function setupEvents() {
     });
   }
 
-  // File Selection via Button or Dropzone Click
+  // File Upload Handlers
   if (elements.btnTriggerFileSelect && elements.bulkFileInput) {
     elements.btnTriggerFileSelect.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1305,7 +1122,6 @@ function setupEvents() {
       }
     });
 
-    // Drag and drop listeners
     ["dragenter", "dragover"].forEach((eventName) => {
       elements.bulkDropzone.addEventListener(eventName, (e) => {
         e.preventDefault();
@@ -1336,7 +1152,6 @@ function setupEvents() {
     });
   }
 
-  // Clear Bulk Upload
   if (elements.btnCancelBulk) {
     elements.btnCancelBulk.addEventListener("click", () => {
       clearBulkUpload();
@@ -1344,25 +1159,30 @@ function setupEvents() {
     });
   }
 
-  // Confirm and Submit Extracted Bulk Domains
+  // Confirm and Submit Bulk Domains
   if (elements.btnConfirmBulkSubmit) {
-    elements.btnConfirmBulkSubmit.addEventListener("click", () => {
+    elements.btnConfirmBulkSubmit.addEventListener("click", async () => {
       if (!extractedBulkDomains || extractedBulkDomains.length === 0) {
         alert("No valid extracted domains to submit. Please upload an Excel sheet first.");
         return;
       }
 
-      const totalToAdd = extractedBulkDomains.length;
-      store.addBatch(extractedBulkDomains);
-      clearBulkUpload();
-      renderClientSubmissions();
-      if (auth.isAdmin()) renderAdminTable();
-      updateMetrics();
-      showToast(`Successfully added ${totalToAdd} domains from Excel!`);
+      try {
+        const total = extractedBulkDomains.length;
+        await api.submitBulkDomains(extractedBulkDomains);
+        clearBulkUpload();
+        await loadClientSubmissions();
+        if (isAdminUser()) {
+          await loadAdminData();
+        }
+        showToast(`Successfully added ${total} domains from Excel!`);
+      } catch (err) {
+        alert("Bulk submission failed: " + err.message);
+      }
     });
   }
 
-  // Admin Controls (Sort & Filter)
+  // Admin Search & Sort
   elements.adminSortSelect.addEventListener("change", () => {
     renderAdminTable();
   });
@@ -1377,18 +1197,12 @@ function setupEvents() {
 
   elements.btnExportCsv.addEventListener("click", exportCsv);
 
-  elements.btnResetDemo.addEventListener("click", () => {
-    if (confirm("Restore sample domains?")) {
-      store.reset();
-      renderClientSubmissions();
-      renderAdminTable();
-      updateMetrics();
-      showToast("Sample data restored");
-    }
-  });
+  if (elements.btnResetDemo) {
+    elements.btnResetDemo.style.display = "none"; // Hide mock demo reset in production secure mode
+  }
 
-  // Edit Modal Submit
-  elements.formEdit.addEventListener("submit", (e) => {
+  // Edit Domain Modal Submit
+  elements.formEdit.addEventListener("submit", async (e) => {
     e.preventDefault();
     const id = elements.editId.value;
     const name = cleanDomainName(elements.editDomain.value);
@@ -1397,22 +1211,18 @@ function setupEvents() {
     const status = elements.editStatus.value;
     const note = elements.editNote.value.trim();
 
-    store.update(id, {
-      name,
-      category,
-      price,
-      status,
-      note
-    });
-
-    elements.modalEdit.classList.remove("show");
-    renderAdminTable();
-    renderClientSubmissions();
-    updateMetrics();
-    showToast("Listing updated");
+    try {
+      await api.updateDomain(id, { name, category, price, status, note });
+      elements.modalEdit.classList.remove("show");
+      await loadAdminData();
+      await loadClientSubmissions();
+      showToast("Listing updated successfully");
+    } catch (err) {
+      alert("Failed to update domain: " + err.message);
+    }
   });
 
-  // Modal Close
+  // Modal Close Handlers
   document.querySelectorAll("[data-close-modal]").forEach((b) => {
     b.addEventListener("click", () => {
       elements.modalEdit.classList.remove("show");
@@ -1431,7 +1241,7 @@ function setupEvents() {
     }
   });
 
-  // Theme Toggle
+  // Theme Toggle (Kept in localStorage as non-sensitive UI preference)
   elements.themeToggleBtn.addEventListener("click", () => {
     const current = document.body.getAttribute("data-theme") || "dark";
     const next = current === "dark" ? "light" : "dark";
@@ -1448,9 +1258,9 @@ function setupEvents() {
 // =============================================================================
 // INITIALIZE
 // =============================================================================
-function init() {
+async function init() {
   setupEvents();
-  syncAppState();
+  await syncAppState();
 }
 
 if (document.readyState === "loading") {
