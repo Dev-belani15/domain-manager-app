@@ -35,7 +35,7 @@ async function runTests() {
     // ----------------------------------------------------
     // TEST 1: Password Encryption & Zero Plaintext in DB
     // ----------------------------------------------------
-    const adminUser = dbService.getUserByEmail('admin@domainportal.internal');
+    const adminUser = await dbService.getUserByEmail('admin@domainportal.internal');
     assert(adminUser !== undefined, 'Admin account exists in SQLite');
     assert(
       adminUser.password_hash.startsWith('$2b$10$') || adminUser.password_hash.startsWith('$2a$'),
@@ -79,6 +79,11 @@ async function runTests() {
     // ----------------------------------------------------
     // TEST 5: Create Client Accounts & Test Multi-Tenancy
     // ----------------------------------------------------
+    const existingAlpha = await dbService.getUserByEmail('alpha@company.com');
+    if (existingAlpha) await dbService.deleteUser(existingAlpha.id);
+    const existingBeta = await dbService.getUserByEmail('beta@corporation.com');
+    if (existingBeta) await dbService.deleteUser(existingBeta.id);
+
     // Create Client Alpha
     const createAlphaRes = await fetch(`${BASE_URL}/api/admin/clients`, {
       method: 'POST',

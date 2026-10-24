@@ -68,7 +68,7 @@ export async function promptCreateAdmin() {
       }
     }
 
-    const existing = dbService.getUserByEmail(email);
+    const existing = await dbService.getUserByEmail(email);
     if (existing) {
       console.log(`\n⚠️  An account with email "${email}" already exists (Role: ${existing.role}).`);
       const overwrite = await ask(rl, 'Reset this account password to make it admin? (y/N): ');
@@ -99,10 +99,10 @@ export async function promptCreateAdmin() {
 
     if (existing) {
       // Delete existing and re-insert
-      dbService.deleteUser(existing.id);
+      await dbService.deleteUser(existing.id);
     }
 
-    const user = dbService.createUser({
+    const user = await dbService.createUser({
       id: 'usr_' + Date.now().toString(36),
       name,
       clientRef: 'Admin',
@@ -140,11 +140,11 @@ export async function runCli() {
       console.error('❌ Password must be at least 6 characters.');
       process.exit(1);
     }
-    const existing = dbService.getUserByEmail(emailArg);
+    const existing = await dbService.getUserByEmail(emailArg);
     if (existing) {
-      dbService.deleteUser(existing.id);
+      await dbService.deleteUser(existing.id);
     }
-    const user = dbService.createUser({
+    const user = await dbService.createUser({
       id: 'usr_' + Date.now().toString(36),
       name: nameArg,
       clientRef: 'Admin',

@@ -5,6 +5,12 @@ import { dbService } from './db.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'domain_portal_super_secure_jwt_secret_9834271';
 const COOKIE_NAME = 'domain_portal_token';
 
+// Admin email list from environment
+const adminEmails = (process.env.ADMIN_EMAILS || 'admin@domainportal.com')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+
 export const authService = {
   hashPassword(password) {
     const salt = bcrypt.genSaltSync(10);
@@ -12,7 +18,13 @@ export const authService = {
   },
 
   comparePassword(plain, hash) {
+    if (!plain || !hash) return false;
     return bcrypt.compareSync(plain, hash);
+  },
+
+  isAdminEmail(email) {
+    if (!email) return false;
+    return adminEmails.includes(email.trim().toLowerCase());
   },
 
   generateToken(user) {
@@ -37,6 +49,22 @@ export const authService = {
     }
   },
 
+  decodeFirebaseToken(token) {
+    try {
+      const decoded = jwt.decode(token);
+      if (decoded && (decoded.iss?.includes('securetoken.google.com') || decoded.user_id || decoded.sub)) {
+        return {
+          uid: decoded.user_id || decoded.sub,
+          email: (decoded.email || '').toLowerCase(),
+          name: decoded.name || decoded.display_name || ''
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   getCookieOptions() {
     return {
       httpOnly: true,
@@ -49,7 +77,7 @@ export const authService = {
   COOKIE_NAME
 };
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   // Check cookie or Bearer token header
   let token = req.cookies && req.cookies[COOKIE_NAME];
   if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
@@ -60,17 +88,25 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   }
 
+  let user = null;
   const payload = authService.verifyToken(token);
-  if (!payload) {
-    res.clearCookie(COOKIE_NAME);
-    return res.status(401).json({ error: 'Session expired or invalid token. Please sign in again.' });
+
+  if (payload) {
+    user = await dbService.getUserById(payload.id);
+  } else {
+    // Check if token is a Firebase ID Token
+    const fbDecoded = authService.decodeFirebaseToken(token);
+    if (fbDecoded) {
+      user = await dbService.getUserById(fbDecoded.uid);
+      if (!user && fbDecoded.email) {
+        user = await dbService.getUserByEmail(fbDecoded.email);
+      }
+    }
   }
 
-  // Verify user still exists in database
-  const user = dbService.getUserById(payload.id);
   if (!user) {
     res.clearCookie(COOKIE_NAME);
-    return res.status(401).json({ error: 'User account no longer exists.' });
+    return res.status(401).json({ error: 'Session expired or invalid token. Please sign in again.' });
   }
 
   req.user = user;

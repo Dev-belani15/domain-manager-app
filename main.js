@@ -1,14 +1,21 @@
 import * as XLSX from "xlsx";
+import {
+  firebaseSignUp,
+  firebaseLogin,
+  firebaseGoogleSignIn,
+  firebaseSignOut,
+  isFirebaseConfigured
+} from "./firebase-auth.js";
+import { signInWithGoogle, initGoogleOneTap } from "./google-auth.js";
 
 /**
  * DomainPortal - Enterprise-Grade Secure Client Architecture
  * 
- * Security Implementation:
- * - ZERO hardcoded credentials or user accounts in source code.
- * - ZERO sensitive data or passwords in localStorage.
- * - Server-side authentication with salted bcrypt hashes and HttpOnly session cookies.
- * - Cryptographic JWT role verification on every API transaction.
- * - Strict server-side multi-tenancy isolation (clients only receive their own records).
+ * Multi-Tenant Cloud Architecture:
+ * - Supabase PostgreSQL database integration with row-level tenant security.
+ * - Firebase Authentication supporting client Sign Up, Login, and Google OAuth.
+ * - Strict client data isolation: each client exclusively sees their own domains.
+ * - Real-time metrics and Administrator cross-tenant dashboard with client filtering.
  */
 
 const THEME_KEY = "domain_theme_pref";
@@ -67,6 +74,27 @@ const api = {
     });
   },
 
+  async registerClient(data) {
+    return this.request("/api/auth/register-client", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+  },
+
+  async syncFirebaseAuth(data) {
+    return this.request("/api/auth/firebase-sync", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+  },
+
+  async loginWithGoogle(data) {
+    return this.request("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+  },
+
   async setupFirstAdmin(name, email, password) {
     return this.request("/api/auth/setup-first-admin", {
       method: "POST",
@@ -75,6 +103,9 @@ const api = {
   },
 
   async logout() {
+    try {
+      await firebaseSignOut();
+    } catch (_) {}
     return this.request("/api/auth/logout", {
       method: "POST"
     });
@@ -149,12 +180,27 @@ const state = {
 // DOM ELEMENT REFERENCES
 // =============================================================================
 const elements = {
-  // Mandatory Auth Screen (Sign-In Only)
+  // Mandatory Auth Screen (Sign-In & Sign-Up)
   mandatoryAuthScreen: document.getElementById("mandatory-auth-screen"),
+  tabBtnSignIn: document.getElementById("tab-btn-signin"),
+  tabBtnSignUp: document.getElementById("tab-btn-signup"),
   formMandatoryLogin: document.getElementById("form-mandatory-login"),
   gateLoginEmail: document.getElementById("gate-login-email"),
   gateLoginPassword: document.getElementById("gate-login-password"),
+  btnSubmitSignIn: document.getElementById("btn-submit-signin"),
+  btnGoogleLogin: document.getElementById("btn-google-login"),
+
+  // Client Sign Up Elements
+  formMandatorySignUp: document.getElementById("form-mandatory-signup"),
+  signupName: document.getElementById("signup-name"),
+  signupClientRef: document.getElementById("signup-client-ref"),
+  signupEmail: document.getElementById("signup-email"),
+  signupPassword: document.getElementById("signup-password"),
+  btnSubmitSignUp: document.getElementById("btn-submit-signup"),
+  btnGoogleSignUp: document.getElementById("btn-google-signup"),
+
   authSubText: document.getElementById("auth-sub-text"),
+
 
   // Main App Wrapper
   mainAppWrapper: document.getElementById("main-app-wrapper"),
@@ -167,7 +213,7 @@ const elements = {
   themeToggleBtn: document.getElementById("theme-toggle-btn"),
   badgeTotalDomains: document.getElementById("badge-total-domains"),
 
-  // Header User Profile
+  // Header User Profile & Badges
   headerUserAvatar: document.getElementById("header-user-avatar"),
   headerUserLabel: document.getElementById("header-user-label"),
   btnLogout: document.getElementById("btn-logout"),
@@ -313,27 +359,12 @@ async function syncAppState() {
     // Ignore
   }
 
+
   // Check with server for authenticated session
   const user = await api.checkAuth();
   state.currentUser = user;
 
   if (!user) {
-    // Check if initial admin setup is required
-    try {
-      const status = await api.checkStatus();
-      if (!status.hasAdmin) {
-        if (elements.authSubText) {
-          elements.authSubText.innerHTML = `⚠️ <strong>Initial Setup Required:</strong> Run <code>npm run create-admin</code> in terminal to set up the master administrator.`;
-        }
-      } else {
-        if (elements.authSubText) {
-          elements.authSubText.textContent = "Sign in to your account";
-        }
-      }
-    } catch {
-      // Backend may be starting
-    }
-
     elements.mandatoryAuthScreen.style.display = "flex";
     elements.mainAppWrapper.style.display = "none";
     return;
@@ -344,12 +375,13 @@ async function syncAppState() {
   elements.mainAppWrapper.style.display = "flex";
 
   const isAdm = isAdminUser();
-  elements.headerUserLabel.textContent = isAdm ? (user.name || "Administrator") : user.email;
+  elements.headerUserLabel.textContent = user.name ? `${user.name} (${user.email})` : user.email;
   elements.headerUserAvatar.textContent = isAdm ? "AD" : getInitials(user.email);
+
 
   syncAdminGate();
 
-  // Load client's own domains from server
+  // Load client's own domains from server (Strict Isolation)
   await loadClientSubmissions();
 
   if (isAdm) {
@@ -884,14 +916,65 @@ function clearBulkUpload() {
 // EVENT LISTENERS
 // =============================================================================
 function setupEvents() {
-  // Mandatory Login Form
+  // 1. Auth Mode Switcher (Sign In vs Sign Up)
+  if (elements.tabBtnSignIn && elements.tabBtnSignUp) {
+    elements.tabBtnSignIn.addEventListener("click", () => {
+      elements.tabBtnSignIn.classList.add("active");
+      elements.tabBtnSignIn.setAttribute("aria-selected", "true");
+      elements.tabBtnSignUp.classList.remove("active");
+      elements.tabBtnSignUp.setAttribute("aria-selected", "false");
+      elements.formMandatoryLogin.style.display = "flex";
+      elements.formMandatorySignUp.style.display = "none";
+      if (elements.authSubText) {
+        elements.authSubText.textContent = "Sign in to your client workspace";
+      }
+    });
+
+    elements.tabBtnSignUp.addEventListener("click", () => {
+      elements.tabBtnSignUp.classList.add("active");
+      elements.tabBtnSignUp.setAttribute("aria-selected", "true");
+      elements.tabBtnSignIn.classList.remove("active");
+      elements.tabBtnSignIn.setAttribute("aria-selected", "false");
+      elements.formMandatorySignUp.style.display = "flex";
+      elements.formMandatoryLogin.style.display = "none";
+      if (elements.authSubText) {
+        elements.authSubText.textContent = "Create your client workspace (Private & Isolated)";
+      }
+    });
+  }
+
+  // 2. Mandatory Login Form (Firebase Auth + Portal Fallback)
   elements.formMandatoryLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = elements.gateLoginEmail.value.trim();
     const password = elements.gateLoginPassword.value;
+    const btnSubmit = elements.btnSubmitSignIn;
+    const originalText = btnSubmit ? btnSubmit.textContent : "Sign In";
+
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = "Signing In...";
+    }
 
     try {
-      const res = await api.login(email, password);
+      let res;
+      if (isFirebaseConfigured) {
+        try {
+          const fbUser = await firebaseLogin(email, password);
+          res = await api.syncFirebaseAuth({
+            idToken: fbUser.idToken,
+            uid: fbUser.uid,
+            email: fbUser.email,
+            name: fbUser.displayName
+          });
+        } catch (fbErr) {
+          console.warn("[Firebase Login Attempt]:", fbErr.message, "Falling back to portal auth...");
+          res = await api.login(email, password);
+        }
+      } else {
+        res = await api.login(email, password);
+      }
+
       elements.formMandatoryLogin.reset();
       state.currentUser = res.user;
       await syncAppState();
@@ -901,12 +984,113 @@ function setupEvents() {
         showToast("Signed in as Administrator");
       } else {
         elements.tabPortal.click();
-        showToast("Signed in successfully!");
+        showToast(`Welcome back, ${res.user.name || res.user.clientRef}!`);
       }
     } catch (err) {
       alert(err.message || "Invalid email or password.");
+    } finally {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = originalText;
+      }
     }
   });
+
+  // 3. New Client Self-Registration Form
+  if (elements.formMandatorySignUp) {
+    elements.formMandatorySignUp.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = elements.signupName.value.trim();
+      const clientRef = elements.signupClientRef.value.trim();
+      const email = elements.signupEmail.value.trim();
+      const password = elements.signupPassword.value;
+      const btnSubmit = elements.btnSubmitSignUp;
+      const originalText = btnSubmit ? btnSubmit.textContent : "Create Client Account";
+
+      if (!email || !password || password.length < 6) {
+        alert("Please provide a valid email and a password of at least 6 characters.");
+        return;
+      }
+
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Creating Account...";
+      }
+
+      try {
+        let res;
+        if (isFirebaseConfigured) {
+          const fbUser = await firebaseSignUp(email, password, name);
+          res = await api.syncFirebaseAuth({
+            idToken: fbUser.idToken,
+            uid: fbUser.uid,
+            email: fbUser.email,
+            name: name || fbUser.displayName,
+            clientRef
+          });
+        } else {
+          res = await api.registerClient({
+            name,
+            email,
+            password,
+            clientRef
+          });
+        }
+
+        elements.formMandatorySignUp.reset();
+        state.currentUser = res.user;
+        await syncAppState();
+
+        elements.tabPortal.click();
+        showToast(`Client account created for ${res.user.clientRef || res.user.name}!`);
+      } catch (err) {
+        alert("Registration failed: " + (err.message || "Could not create client account."));
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = originalText;
+        }
+      }
+    });
+  }
+
+  // 4. Google OAuth Sign In / Sign Up
+  const handleGoogleAuth = async () => {
+    try {
+      if (elements.btnGoogleLogin) elements.btnGoogleLogin.disabled = true;
+      if (elements.btnGoogleSignUp) elements.btnGoogleSignUp.disabled = true;
+
+      const tokenData = await signInWithGoogle();
+      const res = await api.loginWithGoogle(tokenData);
+
+      state.currentUser = res.user;
+      await syncAppState();
+
+      if (isAdminUser()) {
+        elements.tabAdmin.click();
+        showToast("Signed in with Google as Administrator");
+      } else {
+        elements.tabPortal.click();
+        showToast(`Welcome, ${res.user.name || res.user.clientRef}!`);
+      }
+    } catch (err) {
+      console.error("[Google Sign-In Error]:", err);
+      if (err.message && !err.message.includes("cancelled") && !err.message.includes("closed")) {
+        alert("Google Sign-In: " + (err.message || "Authentication failed."));
+      }
+    } finally {
+      if (elements.btnGoogleLogin) elements.btnGoogleLogin.disabled = false;
+      if (elements.btnGoogleSignUp) elements.btnGoogleSignUp.disabled = false;
+    }
+  };
+
+  if (elements.btnGoogleLogin) {
+    elements.btnGoogleLogin.addEventListener("click", handleGoogleAuth);
+  }
+  if (elements.btnGoogleSignUp) {
+    elements.btnGoogleSignUp.addEventListener("click", handleGoogleAuth);
+  }
+
 
   // Admin User Provisioning Events
   if (elements.btnOpenCreateId) {
@@ -1228,10 +1412,11 @@ function setupEvents() {
       elements.modalEdit.classList.remove("show");
       if (elements.modalCreateId) elements.modalCreateId.classList.remove("show");
       if (elements.modalClientIds) elements.modalClientIds.classList.remove("show");
+      if (elements.modalCloudGuide) elements.modalCloudGuide.classList.remove("show");
     });
   });
 
-  [elements.modalEdit, elements.modalCreateId, elements.modalClientIds].forEach((modal) => {
+  [elements.modalEdit, elements.modalCreateId, elements.modalClientIds, elements.modalCloudGuide].forEach((modal) => {
     if (modal) {
       modal.addEventListener("click", (e) => {
         if (e.target === modal) {

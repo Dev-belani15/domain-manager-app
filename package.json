@@ -8,7 +8,9 @@
     "dev:client": "vite",
     "start:server": "node server/index.js",
     "create-admin": "node server/cli/create-admin.js",
+    "test": "node test/security-test.js && node test/client-signup-test.js",
     "test:security": "node test/security-test.js",
+    "test:signup": "node test/client-signup-test.js",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -17,11 +19,14 @@
     "vite": "^6.2.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
+    "firebase": "^13.1.0",
+    "google-auth-library": "^11.3.1",
     "jsonwebtoken": "^9.0.3",
     "xlsx": "^0.18.5"
   }
